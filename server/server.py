@@ -7,6 +7,7 @@ import threading
 import qrcode
 import os
 import socket
+import PIL
 
 HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8765             # WebSocket port

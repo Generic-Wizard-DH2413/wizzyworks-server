@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Phone Client</title>
+  </head>
+  <body>
+    <h1>Connected to Server</h1>
+    <input id="msg" type="text" placeholder="Type message..."/>
+    <button onclick="sendMessage()">Send</button>
+    <div id="log"></div>
+
+    <script>
+      const ws = new WebSocket(`ws://130.229.131.160:8765`);
+      ws.onopen = () => log("Connected!");
+      ws.onmessage = (evt) => log("Server: " + evt.data);
+
+      function sendMessage() {
+        const msg = document.getElementById("msg").value;
+        ws.send(msg);
+        log("You: " + msg);
+      }
+
+      function log(m) {
+        document.getElementById("log").innerHTML += m + "<br>";
+      }
+    </script>
+  </body>
+</html>
