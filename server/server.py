@@ -44,6 +44,40 @@ def check_origin(origin):
         
     return origin in ALLOWED_ORIGINS
 
+async def validate_client_message(data, client_id):
+    """
+    Validate client messages before forwarding to bridge
+    TODO: Add actual validation logic here
+    """
+    # Placeholder for validation logic
+    # For now, accept all messages
+    print(f"Validating message from client {client_id}")
+    
+    # Future validation could include:
+    # - Message format validation
+    # - Rate limiting
+    # - Authentication checks
+    # - Content filtering
+    
+    return True  # Accept all messages for now
+
+async def handle_bridge_connection(websocket):
+    """Handle bridge connection separately - no ID allocation, no automatic messages"""
+    try:
+        async for message in websocket:
+            print(f"Received from bridge: {message}")
+            # Bridge messages are handled here if needed
+            # For now, just log them without forwarding to other clients
+            
+    except websockets.exceptions.ConnectionClosed:
+        print("Bridge connection closed")
+    except Exception as e:
+        print(f"Error with bridge connection: {e}")
+    finally:
+        global bridge
+        bridge = None
+        print("Bridge disconnected")
+
 async def hostHandler(websocket):
     global next_id
     host, port = websocket.remote_address
@@ -53,65 +87,90 @@ async def hostHandler(websocket):
         first_message = await websocket.recv()
         print(f"First message from {host}:{port} -> {first_message}")
 
-        # Example: only accept if message type == "connection"
         data = json.loads(first_message)
-        if data.get("type") != "connection":
-            print("Ignoring non-client connection")
-            await websocket.close()
-            return
         if data.get("type") == "bridge":
             global bridge
             bridge = websocket
             print("Bridge connected")
+            # Handle bridge connection separately - no ID allocation, no automatic messages
+            await handle_bridge_connection(websocket)
             return
+        elif data.get("type") != "connection":
+            print("Ignoring non-client connection")
+            await websocket.close()
+            return
+        
     except Exception as e:
         print(f"Error during handshake: {e}")
         return
 
-    # If valid -> proceed as before
+    # If valid -> proceed as before (only for regular clients)
     connected.add(websocket)
     ids[websocket] = next_id
     client_id = next_id
     next_id += 1
 
-    print(f"Host connected: {host}:{port} -> ID {client_id}")
+    print(f"Host connected: {host}:{port} -> id {client_id}")
+    package = {"code": 0, "data": {"id": client_id}}
+    await websocket.send(json.dumps(package))
 
     try:
         async for message in websocket:
-            print(f"Received from ID {client_id}: {message}")
-            for ws in connected:
-                try:
-                    package = {"code": 0, "data": {"ID:": client_id}}
-                    await ws.send(json.dumps(package))
-                except websockets.exceptions.ConnectionClosed:
-                    # Client is already closed, remove it
-                    connected.remove(ws)
-                    ids.pop(ws, None)
+            print(f"Received from id {client_id}: {message}")
+            
             try:
                 data = json.loads(message)
             except json.JSONDecodeError:
-                print(f"Received invalid JSON from ID {client_id}")
-                return
-             # Safely extract fields with fallback
+                print(f"Received invalid JSON from id {client_id}")
+                continue
+                
+            # Validate message (placeholder for future validation logic)
+            if await validate_client_message(data, client_id):
+                # Forward validated message to bridge if connected
+                if bridge:
+                    bridge_message = {
+                        "aruco_id": client_id,
+                        "timestamp": None,  # Add timestamp if needed
+                        "data": data
+                    }
+                    try:
+                        await bridge.send(json.dumps(bridge_message))
+                        print(f"Forwarded message from client {client_id} to bridge")
+                    except websockets.exceptions.ConnectionClosed:
+                        print("Bridge connection lost while forwarding message")
+                        bridge = None
+                    except Exception as e:
+                        print(f"Error forwarding to bridge: {e}")
+                else:
+                    print(f"No bridge connected to forward message from client {client_id}")
+            
+            # Send updates only to regular connected clients, not to the bridge
+            for ws in connected:
+                if ws != bridge:  # Exclude bridge from automatic message forwarding
+                    try:
+                        package = {"code": 0, "data": {"id": client_id}}
+                        await ws.send(json.dumps(package))
+                    except websockets.exceptions.ConnectionClosed:
+                        # Client is already closed, remove it
+                        connected.remove(ws)
+                        ids.pop(ws, None)
+            
+            # Handle specific message types
             msg_type = data.get("type", "unknown")
             payload = data.get("data", {})
-            if msg_type == "bridge":
-                if bridge:
-                    await bridge.send(json.dumps({"from": client_id, "data": payload}))
-
 
             if msg_type == "response":
                 value = payload.get("value", "default fallback")
                 print(f"Client {client_id} responded with: {value}")
 
     except websockets.exceptions.ConnectionClosed:
-        print(f"Connection closed for ID {client_id}")
+        print(f"Connection closed for id {client_id}")
     except Exception as e:
-        print(f"Error with ID {client_id}: {e}")
+        print(f"Error with id {client_id}: {e}")
     finally:
         connected.remove(websocket)
         ids.pop(websocket, None)
-        print(f"Host disconnected: ID {client_id}")
+        print(f"Host disconnected: id {client_id}")
 
     
 
