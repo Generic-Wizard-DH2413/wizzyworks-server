@@ -9,13 +9,15 @@ import qrcode
 import os
 import socket
 from urllib.parse import urlparse
+import json
 
 HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8765             # WebSocket port
 HTTP_PORT = 8000        # HTTP server port
-IP = "130.229.164.26"  # IP address of the server
+IP = "130.229.179.210"  # IP address of the server
 
 connected = set()
+bridge = None
 ids = {}
 next_id = 1
 
@@ -45,7 +47,28 @@ def check_origin(origin):
 async def hostHandler(websocket):
     global next_id
     host, port = websocket.remote_address
-    
+
+    # First message decides if we keep this client
+    try:
+        first_message = await websocket.recv()
+        print(f"First message from {host}:{port} -> {first_message}")
+
+        # Example: only accept if message type == "connection"
+        data = json.loads(first_message)
+        if data.get("type") != "connection":
+            print("Ignoring non-client connection")
+            await websocket.close()
+            return
+        if data.get("type") == "bridge":
+            global bridge
+            bridge = websocket
+            print("Bridge connected")
+            return
+    except Exception as e:
+        print(f"Error during handshake: {e}")
+        return
+
+    # If valid -> proceed as before
     connected.add(websocket)
     ids[websocket] = next_id
     client_id = next_id
@@ -57,8 +80,30 @@ async def hostHandler(websocket):
         async for message in websocket:
             print(f"Received from ID {client_id}: {message}")
             for ws in connected:
-                if ws.open:
-                    await ws.send(f"[{client_id}] {message}")
+                try:
+                    package = {"code": 0, "data": {"ID:": client_id}}
+                    await ws.send(json.dumps(package))
+                except websockets.exceptions.ConnectionClosed:
+                    # Client is already closed, remove it
+                    connected.remove(ws)
+                    ids.pop(ws, None)
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                print(f"Received invalid JSON from ID {client_id}")
+                return
+             # Safely extract fields with fallback
+            msg_type = data.get("type", "unknown")
+            payload = data.get("data", {})
+            if msg_type == "bridge":
+                if bridge:
+                    await bridge.send(json.dumps({"from": client_id, "data": payload}))
+
+
+            if msg_type == "response":
+                value = payload.get("value", "default fallback")
+                print(f"Client {client_id} responded with: {value}")
+
     except websockets.exceptions.ConnectionClosed:
         print(f"Connection closed for ID {client_id}")
     except Exception as e:
@@ -68,6 +113,7 @@ async def hostHandler(websocket):
         ids.pop(websocket, None)
         print(f"Host disconnected: ID {client_id}")
 
+    
 
 # HTTP server with CORS support
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -103,9 +149,9 @@ async def main():
     threading.Thread(target=start_http_server, daemon=True).start()
 
     # Generate QR code for the HTTP site
-    url = "https://wizzyworks-frontend.vercel.app/"
+    url = "http://130.229.179.210:4173/"
     img = qrcode.make(url)
-    img.save("./qr_code.png")
+    img.save(os.path.join(os.path.dirname(__file__), "qr_code.png"))
     print(f"Scan the QR code (qr_code.png) or open {url}")
 
     # Start WebSocket server with CORS support
