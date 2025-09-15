@@ -105,14 +105,20 @@ async def hostHandler(websocket):
         return
 
     # If valid -> proceed as before (only for regular clients)
-    connected.add(websocket)
-    ids[websocket] = next_id
-    client_id = next_id
-    next_id += 1
 
-    print(f"Host connected: {host}:{port} -> id {client_id}")
-    package = {"code": 0, "data": {"id": client_id}}
-    await websocket.send(json.dumps(package))
+    # Check if websocket is already connected to prevent duplicate ID assignment
+    if websocket not in connected:
+        connected.add(websocket)
+        ids[websocket] = next_id
+        client_id = next_id
+        next_id += 1
+
+        print(f"Host connected: {host}:{port} -> id {client_id}")
+        package = {"code": 0, "data": {"id": client_id}}
+        await websocket.send(json.dumps(package))
+    else:
+        client_id = ids[websocket]
+        print(f"Host already connected: {host}:{port} -> existing id {client_id}")
 
     try:
         async for message in websocket:
@@ -143,17 +149,6 @@ async def hostHandler(websocket):
                         print(f"Error forwarding to bridge: {e}")
                 else:
                     print(f"No bridge connected to forward message from client {client_id}")
-            
-            # Send updates only to regular connected clients, not to the bridge
-            for ws in connected:
-                if ws != bridge:  # Exclude bridge from automatic message forwarding
-                    try:
-                        package = {"code": 0, "data": {"id": client_id}}
-                        await ws.send(json.dumps(package))
-                    except websockets.exceptions.ConnectionClosed:
-                        # Client is already closed, remove it
-                        connected.remove(ws)
-                        ids.pop(ws, None)
             
             # Handle specific message types
             msg_type = data.get("type", "unknown")
