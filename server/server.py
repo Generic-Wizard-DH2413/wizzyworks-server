@@ -14,12 +14,15 @@ import json
 HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8765             # WebSocket port
 HTTP_PORT = 8000        # HTTP server port
-IP = "130.229.179.210"  # IP address of the server
+IP = "192.168.0.16"  # IP address of the server
 
 connected = set()
 bridge = None
 ids = {}
 next_id = 1
+
+# Set of reusable IDs
+available_ids = set()
 
 # CORS configuration for WebSocket
 ALLOWED_ORIGINS = [
@@ -109,9 +112,13 @@ async def hostHandler(websocket):
     # Check if websocket is already connected to prevent duplicate ID assignment
     if websocket not in connected:
         connected.add(websocket)
-        ids[websocket] = next_id
-        client_id = next_id
-        next_id += 1
+        # Assign ID from available_ids if possible, else use next_id
+        if available_ids:
+            client_id = available_ids.pop()
+        else:
+            client_id = next_id
+            next_id += 1
+        ids[websocket] = client_id
 
         print(f"Host connected: {host}:{port} -> id {client_id}")
         package = {"code": 0, "data": {"id": client_id}}
@@ -164,7 +171,10 @@ async def hostHandler(websocket):
         print(f"Error with id {client_id}: {e}")
     finally:
         connected.remove(websocket)
-        ids.pop(websocket, None)
+        # Return the ID to available_ids for reuse
+        released_id = ids.pop(websocket, None)
+        if released_id is not None:
+            available_ids.add(released_id)
         print(f"Host disconnected: id {client_id}")
 
     
