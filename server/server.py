@@ -114,7 +114,7 @@ async def hostHandler(websocket):
         connected.add(websocket)
         # Assign ID from available_ids if possible, else use next_id
         if available_ids:
-            client_id = available_ids.pop()
+            client_id = min(available_ids)
         else:
             client_id = next_id
             next_id += 1
