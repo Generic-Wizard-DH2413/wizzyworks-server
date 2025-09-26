@@ -14,7 +14,7 @@ import json
 HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8765             # WebSocket port
 HTTP_PORT = 8000        # HTTP server port
-IP = "192.168.0.16"  # IP address of the server
+IP = "130.229.183.185"  # IP address of the server
 
 connected = set()
 bridge = None
@@ -69,9 +69,26 @@ async def handle_bridge_connection(websocket):
     try:
         async for message in websocket:
             print(f"Received from bridge: {message}")
-            # Bridge messages are handled here if needed
-            # For now, just log them without forwarding to other clients
-            
+            # Try to parse the message as JSON
+            try:
+                data = json.loads(message)
+            except Exception:
+                print("Bridge sent non-JSON message, ignoring.")
+                continue
+
+            # Find the websocket with matching ID
+            target_id = data.get("id")
+            if target_id is not None:
+                for ws, cid in ids.items():
+                    if cid == target_id:
+                        await ws.send(message)
+                        print(f"Message to the frontend: {message}")
+                        print(f"Forwarded bridge message to client id {target_id}")
+                        break
+                else:
+                    print(f"No connected client with id {target_id} to forward bridge message.")
+            else:
+                print("Bridge message missing 'id' field, not forwarded.")
     except websockets.exceptions.ConnectionClosed:
         print("Bridge connection closed")
     except Exception as e:
@@ -126,7 +143,6 @@ async def hostHandler(websocket):
     else:
         client_id = ids[websocket]
         print(f"Host already connected: {host}:{port} -> existing id {client_id}")
-
     try:
         async for message in websocket:
             print(f"Received from id {client_id}: {message}")
@@ -141,13 +157,8 @@ async def hostHandler(websocket):
             if await validate_client_message(data, client_id):
                 # Forward validated message to bridge if connected
                 if bridge:
-                    bridge_message = {
-                        "aruco_id": client_id,
-                        "timestamp": None,  # Add timestamp if needed
-                        "data": data
-                    }
                     try:
-                        await bridge.send(json.dumps(bridge_message))
+                        await bridge.send(json.dumps(data))
                         print(f"Forwarded message from client {client_id} to bridge")
                     except websockets.exceptions.ConnectionClosed:
                         print("Bridge connection lost while forwarding message")
@@ -176,8 +187,6 @@ async def hostHandler(websocket):
         if released_id is not None:
             available_ids.add(released_id)
         print(f"Host disconnected: id {client_id}")
-
-    
 
 # HTTP server with CORS support
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
