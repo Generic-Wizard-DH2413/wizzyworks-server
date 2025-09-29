@@ -129,9 +129,10 @@ async def hostHandler(websocket):
     # Check if websocket is already connected to prevent duplicate ID assignment
     if websocket not in connected:
         connected.add(websocket)
-        # Assign ID from available_ids if possible, else use next_id
+        # Assign the smallest available ID if possible, else use next_id
         if available_ids:
             client_id = min(available_ids)
+            available_ids.remove(client_id)
         else:
             client_id = next_id
             next_id += 1
