@@ -30,7 +30,9 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
     "http://localhost:8000",
-    "http://127.0.0.1:8000"
+    "http://127.0.0.1:8000",
+    "http://192.168.3.7:5173",
+    "http://192.168.3.7:5173"
 ]
 
 def check_origin(origin):
@@ -200,9 +202,9 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
 def start_http_server():
-    os.chdir("web")  # serve files from ./web folder
+    os.chdir("./server/web")  # serve files from ./web folder
     handler = CORSHTTPRequestHandler
-    with socketserver.TCPServer(("", HTTP_PORT), handler) as httpd:
+    with socketserver.TCPServer(("0.0.0.0", HTTP_PORT), handler) as httpd:
         print(f"HTTP server running at http://{get_local_ip()}:{HTTP_PORT}")
         httpd.serve_forever()
 
