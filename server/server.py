@@ -5,7 +5,6 @@ from websockets.asyncio.server import serve
 import http.server
 import socketserver
 import threading
-import qrcode
 import os
 import socket
 from urllib.parse import urlparse
@@ -221,12 +220,6 @@ def get_local_ip():
 async def main():
     # Start HTTP server in background thread
     threading.Thread(target=start_http_server, daemon=True).start()
-
-    # Generate QR code for the HTTP site
-    url = "http://130.229.179.210:4173/"
-    img = qrcode.make(url)
-    img.save(os.path.join(os.path.dirname(__file__), "qr_code.png"))
-    print(f"Scan the QR code (qr_code.png) or open {url}")
 
     # Start WebSocket server with CORS support
     async with serve(
