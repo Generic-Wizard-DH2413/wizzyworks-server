@@ -13,7 +13,6 @@ import json
 HOST = "0.0.0.0"        # Listen on all interfaces
 PORT = 8765             # WebSocket port
 HTTP_PORT = 8000        # HTTP server port
-IP = "130.229.183.185"  # IP address of the server
 
 connected = set()
 bridge = None
