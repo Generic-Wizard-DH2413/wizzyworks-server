@@ -13,9 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the server directory
 COPY server/ ./server/
 
-# Create web directory if it doesn't exist
-RUN mkdir -p server/web
-
 # Expose ports
 EXPOSE 8765 8000
 

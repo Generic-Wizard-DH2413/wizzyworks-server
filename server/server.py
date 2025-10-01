@@ -2,17 +2,16 @@ import asyncio
 import websockets
 import websockets.exceptions
 from websockets.asyncio.server import serve
-import http.server
-import socketserver
-import threading
 import os
 import socket
 from urllib.parse import urlparse
 import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
-HOST = "0.0.0.0"        # Listen on all interfaces
-PORT = 8765             # WebSocket port
-HTTP_PORT = 8000        # HTTP server port
+HOST = os.getenv("HOST", "0.0.0.0")        # Listen on all interfaces
+PORT = int(os.getenv("WS_PORT", "8765"))             # WebSocket port
+HTTP_PORT = int(os.getenv("HEALTH_PORT", "8000"))    # Health check port
 
 connected = set()
 bridge = None
@@ -104,7 +103,8 @@ async def hostHandler(websocket):
 
     # First message decides if we keep this client
     try:
-        first_message = await websocket.recv()
+        # Add timeout to prevent hanging on incomplete connections
+        first_message = await asyncio.wait_for(websocket.recv(), timeout=5.0)
         print(f"First message from {host}:{port} -> {first_message}")
 
         data = json.loads(first_message)
@@ -120,8 +120,19 @@ async def hostHandler(websocket):
             await websocket.close()
             return
         
+    except asyncio.TimeoutError:
+        print(f"Timeout waiting for first message from {host}:{port}")
+        await websocket.close()
+        return
+    except websockets.exceptions.ConnectionClosed:
+        print(f"Connection closed during handshake from {host}:{port}")
+        return
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON in first message from {host}:{port}: {e}")
+        await websocket.close()
+        return
     except Exception as e:
-        print(f"Error during handshake: {e}")
+        print(f"Error during handshake from {host}:{port}: {e}")
         return
 
     # If valid -> proceed as before (only for regular clients)
@@ -189,24 +200,32 @@ async def hostHandler(websocket):
             available_ids.add(released_id)
         print(f"Host disconnected: id {client_id}")
 
-# HTTP server with CORS support
-class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        super().end_headers()
+# Minimal health check server
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health' or self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            health_status = {
+                "status": "healthy",
+                "websocket_port": PORT,
+                "connected_clients": len(connected),
+                "bridge_connected": bridge is not None
+            }
+            self.wfile.write(json.dumps(health_status).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
     
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.end_headers()
+    def log_message(self, format, *args):
+        # Suppress HTTP server logs
+        pass
 
-def start_http_server():
-    os.chdir("./server/web")  # serve files from ./web folder
-    handler = CORSHTTPRequestHandler
-    with socketserver.TCPServer(("0.0.0.0", HTTP_PORT), handler) as httpd:
-        print(f"HTTP server running at http://{get_local_ip()}:{HTTP_PORT}")
-        httpd.serve_forever()
+def start_health_server():
+    httpd = HTTPServer(("0.0.0.0", HTTP_PORT), HealthCheckHandler)
+    print(f"Health check server running at http://{get_local_ip()}:{HTTP_PORT}/health")
+    httpd.serve_forever()
 
 # Helper: get LAN IP
 def get_local_ip():
@@ -219,8 +238,8 @@ def get_local_ip():
         
 # Main
 async def main():
-    # Start HTTP server in background thread
-    threading.Thread(target=start_http_server, daemon=True).start()
+    # Start minimal health check server in background thread
+    threading.Thread(target=start_health_server, daemon=True).start()
 
     # Start WebSocket server with CORS support
     async with serve(

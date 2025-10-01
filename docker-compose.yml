@@ -3,12 +3,9 @@ services:
     build: .
     ports:
       - "8765:8765"  # WebSocket port
-      - "8000:8000"  # HTTP server port
+      - "8000:8000"  # Health check port
     environment:
       - PYTHONUNBUFFERED=1
-    volumes:
-      # Optional: Mount web directory for development
-      - ./server/web:/app/server/web
     restart: unless-stopped
     networks:
       - wizzyworks-network
