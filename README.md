@@ -1,11 +1,15 @@
-# wizzyworks-server
+# WizzyWorks Server
 
-A WebSocket server with HTTP file serving capabilities for the WizzyWorks platform.
+This is the WebSocket server what uses WebSockets to communicate with multiple clients, including the WizzyWorks Webapp and the WizzyWorks Bridge. And this is part of the WizzyWorks virtual firework experience from the course DH2413 Advanced Graphics and Interaction in KTH, 2025.
+
+It is intended for this system to run alongside other components of the WizzyWorks project, as shown in the diagram below. The server will relay any messages sent by the Webapp to the Bridge and vice versa. Ideally the server should be deployed to a public server that can be accessed by the WizzyWorks Webapp and the WizzyWorks Bridge, but it can also be run locally for development purposes.
+
+![Visuals Server](visuals_server.png)
 
 ## Features
 
 - WebSocket server on port 8765
-- HTTP file server on port 8000
+- HTTP health check server on port 8000
 - CORS support for web clients
 - Bridge connection support for external services
 - Client ID management with reusable IDs
@@ -38,11 +42,13 @@ docker run -d -p 8765:8765 -p 8000:8000 --name wizzyworks-server wizzyworks-serv
 ### Port Configuration
 
 - **8765**: WebSocket server port
-- **8000**: HTTP file server port
+- **8000**: HTTP health check server port
 
 Both ports are exposed and can be accessed via:
 - WebSocket: `ws://localhost:8765`
-- HTTP: `http://localhost:8000`
+- Health check: `http://localhost:8000/health`
+
+The health check endpoint provides JSON status information, including the number of connected clients and bridge connection status.
 
 ## Local Development
 
