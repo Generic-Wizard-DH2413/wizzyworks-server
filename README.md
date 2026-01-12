@@ -9,9 +9,11 @@ It is intended for this system to run alongside other components of the WizzyWor
 ## Features
 
 - WebSocket server on port 8765
+- WizzyWorks webapp can connect as clients
+- WizzyWorks bridge can connect as bridge
+- Relaying information between the clients and the bridge
 - HTTP health check server on port 8000
 - CORS support for web clients
-- Bridge connection support for external services
 - Client ID management with reusable IDs
 
 ## Docker Deployment
